@@ -1,15 +1,23 @@
 """FastAPI application entry point."""
 
 import os
+import sys
+import traceback
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import Base, engine
-from routers import auth, reconciliation, reports
+try:
+    from database import Base, engine
+    from routers import auth, reconciliation, reports
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+    # Create tables
+    Base.metadata.create_all(bind=engine)
+    print("Database tables created successfully", flush=True)
+except Exception as e:
+    print(f"STARTUP ERROR: {e}", flush=True)
+    traceback.print_exc()
+    sys.exit(1)
 
 app = FastAPI(
     title="Conciliacao Philips-Stankhelp API",
