@@ -362,6 +362,26 @@ def export_reconciliation(
         stankhelp_count=recon.stankhelp_count,
     )
 
+    # Mapeia o texto da divergencia de volta para as chaves usadas em write_report
+    # para colorir as celulas divergentes em vermelho na aba Divergencias.
+    _DIFF_TEXT_PREFIXES = {
+        "Tipo": "tipo",
+        "Atividade": "atividade",
+        "Cidade": "cidade",
+        "Numero de serie": "serial",
+    }
+
+    def _parse_diff_fields(divergencias_text: str | None) -> set:
+        if not divergencias_text:
+            return set()
+        fields = set()
+        for part in divergencias_text.split("; "):
+            for prefix, field_key in _DIFF_TEXT_PREFIXES.items():
+                if part.startswith(prefix):
+                    fields.add(field_key)
+                    break
+        return fields
+
     for rec in recon.records:
         row = {
             "SWO": rec.swo,
@@ -388,7 +408,7 @@ def export_reconciliation(
             "Atividade Stankhelp": "",
             "Cidade Philips": rec.cidade,
             "Cidade Stankhelp": "",
-            "_diff_fields": set(),
+            "_diff_fields": _parse_diff_fields(rec.divergencias),
             "_diffs": rec.divergencias.split("; ") if rec.divergencias else [],
             # For only_philips / only_stank, map to expected keys
             "Cliente": rec.cliente,
