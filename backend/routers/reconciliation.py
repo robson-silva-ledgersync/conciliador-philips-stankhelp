@@ -16,6 +16,7 @@ from reconciler import (
     ReconciliationResult,
     load_philips,
     load_stankhelp,
+    normalize_swo,
     reconcile,
     write_report,
 )
@@ -98,6 +99,12 @@ async def upload_and_reconcile(
     """Upload 2 Excel files, run reconciliation filtering by month + representante."""
     _validate_upload(philips_file, "Base Philips")
     _validate_upload(stankhelp_file, "Relatorio Stankhelp")
+
+    if len(representante.strip()) < 3:
+        raise HTTPException(
+            status_code=400,
+            detail="Nome do representante deve ter pelo menos 3 caracteres",
+        )
 
     # Le com limite de tamanho (caso .size nao esteja disponivel)
     philips_bytes = await philips_file.read()
@@ -393,22 +400,26 @@ def export_reconciliation(
             "Número de Série": rec.serial,
         }
 
+        # Usar SWO normalizado (sem sufixo "-20") para consistencia com live reconcile.
+        # Em only_stank o SWO e o original do Stankhelp ("12345-20"); em outros e o do Philips ja sem sufixo.
+        normalized_swo = normalize_swo(rec.swo) if rec.swo else None
+
         if rec.status == "conciliado":
             result.conciliados.append(row)
-            if rec.swo:
-                result.common_swos.add(rec.swo)
+            if normalized_swo:
+                result.common_swos.add(normalized_swo)
         elif rec.status == "divergencia":
             result.divergencias.append(row)
-            if rec.swo:
-                result.common_swos.add(rec.swo)
+            if normalized_swo:
+                result.common_swos.add(normalized_swo)
         elif rec.status == "only_philips":
             result.only_philips.append(row)
-            if rec.swo:
-                result.only_philips_swos.add(rec.swo)
+            if normalized_swo:
+                result.only_philips_swos.add(normalized_swo)
         elif rec.status == "only_stank":
             result.only_stank.append(row)
-            if rec.swo:
-                result.only_stank_swos.add(rec.swo)
+            if normalized_swo:
+                result.only_stank_swos.add(normalized_swo)
 
     # Write to in-memory buffer
     with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
