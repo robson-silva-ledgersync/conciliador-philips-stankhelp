@@ -64,7 +64,37 @@ def get_field(rec, *substrings):
 
 # ---------------- Loaders ----------------
 
-def load_philips(path: str) -> list[dict]:
+def _extract_month(val) -> str | None:
+    """Extrai 'YYYY-MM' de datetime, date ou string DD.MM.YYYY / DD/MM/YYYY."""
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val.strftime('%Y-%m')
+    if hasattr(val, 'year') and hasattr(val, 'month'):
+        return f'{val.year:04d}-{val.month:02d}'
+    s = str(val).strip()
+    m = re.match(r'(\d{1,2})[./](\d{1,2})[./](\d{4})', s)
+    if m:
+        day, month, year = m.groups()
+        return f'{int(year):04d}-{int(month):02d}'
+    return None
+
+
+def load_philips(
+    path: str,
+    representante_filter: str | None = None,
+    reference_month: str | None = None,
+) -> list[dict]:
+    """
+    Le a planilha base Philips.
+
+    Args:
+        path: caminho do arquivo .xlsx
+        representante_filter: substring a buscar no campo Representante (ex: 'STANK HELP').
+            Se None, retorna todos os representantes.
+        reference_month: 'YYYY-MM' para filtrar por Mes Referencia ou Data de Atendimento.
+            Se None, retorna todos os meses.
+    """
     wb = openpyxl.load_workbook(path, data_only=True)
     if 'Reembolso de Despesas' not in wb.sheetnames:
         raise ValueError(
@@ -73,14 +103,45 @@ def load_philips(path: str) -> list[dict]:
         )
     ws = wb['Reembolso de Despesas']
     headers = [cell.value for cell in ws[1]]
+    rep_upper = representante_filter.strip().upper() if representante_filter else None
+
     data = []
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row, values_only=True):
-        if row[2] is not None:
-            data.append(dict(zip(headers, row)))
+        if row[2] is None:
+            continue
+
+        # Filtro por Representante (coluna 1)
+        if rep_upper:
+            rep = row[1]
+            if not rep or rep_upper not in str(rep).upper():
+                continue
+
+        # Filtro por mes (coluna 0 = Mes Referencia, fallback coluna 5 = Data de Atendimento)
+        if reference_month:
+            month = _extract_month(row[0]) or _extract_month(row[5])
+            if month != reference_month:
+                continue
+
+        data.append(dict(zip(headers, row)))
     return data
 
 
-def load_stankhelp(path: str) -> list[dict]:
+def load_stankhelp(
+    path: str,
+    reference_month: str | None = None,
+) -> list[dict]:
+    """
+    Le a planilha do representante (Stankhelp).
+
+    Args:
+        path: caminho do arquivo .xlsx
+        reference_month: 'YYYY-MM' para filtrar por Data de Atendimento.
+            Se None, retorna todos os registros com SWO (incluindo historicos).
+
+    A planilha pode ter linhas vazias intercaladas (dropdowns de validacao) e
+    registros historicos de meses anteriores no final. O loader le TODAS as
+    linhas com SWO valido e filtra por mes se solicitado.
+    """
     wb = openpyxl.load_workbook(path, data_only=True)
     if 'Reembolso' not in wb.sheetnames:
         raise ValueError(
@@ -93,14 +154,17 @@ def load_stankhelp(path: str) -> list[dict]:
         (h.strip().replace('\n', ' ') if h else h) for h in headers_raw
     ]
     data = []
-    # Le dados contiguos a partir da linha 11. Para na primeira linha sem SWO.
-    # Nao e possivel usar criterios de "linha totalmente vazia" porque rows
-    # subsequentes contem dados estaticos de dropdown (MG, UBERLANDIA, US)
-    # sem SWO, e depois registros historicos de outros periodos.
     for row in ws.iter_rows(min_row=11, max_row=ws.max_row, values_only=True):
         swo_val = row[4]
         if swo_val is None or not str(swo_val).strip():
-            break
+            continue
+
+        # Filtro por mes (coluna 6 = Data de Atendimento)
+        if reference_month:
+            month = _extract_month(row[6])
+            if month != reference_month:
+                continue
+
         data.append(dict(zip(headers, row)))
     return data
 

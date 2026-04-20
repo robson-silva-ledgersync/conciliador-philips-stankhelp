@@ -4,7 +4,7 @@ import io
 import tempfile
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
@@ -91,9 +91,11 @@ def _validate_upload(f: UploadFile, label: str) -> None:
 async def upload_and_reconcile(
     philips_file: UploadFile = File(...),
     stankhelp_file: UploadFile = File(...),
+    reference_month: str = Form(...),
+    representante: str = Form("STANK HELP"),
     user: User = Depends(get_current_user),
 ):
-    """Upload 2 Excel files, run reconciliation, return result (not yet saved)."""
+    """Upload 2 Excel files, run reconciliation filtering by month + representante."""
     _validate_upload(philips_file, "Base Philips")
     _validate_upload(stankhelp_file, "Relatorio Stankhelp")
 
@@ -114,8 +116,15 @@ async def upload_and_reconcile(
         stankhelp_path = f2.name
 
     try:
-        philips_data = load_philips(philips_path)
-        stank_data = load_stankhelp(stankhelp_path)
+        philips_data = load_philips(
+            philips_path,
+            representante_filter=representante,
+            reference_month=reference_month,
+        )
+        stank_data = load_stankhelp(
+            stankhelp_path,
+            reference_month=reference_month,
+        )
         result = reconcile(philips_data, stank_data)
         return _result_to_upload_response(result)
     except HTTPException:
@@ -386,12 +395,20 @@ def export_reconciliation(
 
         if rec.status == "conciliado":
             result.conciliados.append(row)
+            if rec.swo:
+                result.common_swos.add(rec.swo)
         elif rec.status == "divergencia":
             result.divergencias.append(row)
+            if rec.swo:
+                result.common_swos.add(rec.swo)
         elif rec.status == "only_philips":
             result.only_philips.append(row)
+            if rec.swo:
+                result.only_philips_swos.add(rec.swo)
         elif rec.status == "only_stank":
             result.only_stank.append(row)
+            if rec.swo:
+                result.only_stank_swos.add(rec.swo)
 
     # Write to in-memory buffer
     with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:

@@ -65,10 +65,17 @@ class ApiClient {
   }
 
   // Reconciliation
-  async uploadAndReconcile(philipsFile: File, stankhelpFile: File) {
+  async uploadAndReconcile(
+    philipsFile: File,
+    stankhelpFile: File,
+    referenceMonth: string,
+    representante: string = "STANK HELP",
+  ) {
     const form = new FormData();
     form.append("philips_file", philipsFile);
     form.append("stankhelp_file", stankhelpFile);
+    form.append("reference_month", referenceMonth);
+    form.append("representante", representante);
     return this.request<ReconciliationUploadResult>("/api/reconciliation/upload", {
       method: "POST",
       body: form,

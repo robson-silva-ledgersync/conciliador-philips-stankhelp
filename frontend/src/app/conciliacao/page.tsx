@@ -143,7 +143,7 @@ export default function ConciliacaoPage() {
     if (!philipsFile || !stankhelpFile) return;
     setLoading(true);
     try {
-      const res = await api.uploadAndReconcile(philipsFile, stankhelpFile);
+      const res = await api.uploadAndReconcile(philipsFile, stankhelpFile, month);
       setResult(res);
       toast.success("Conciliacao realizada com sucesso!");
     } catch (err) {
