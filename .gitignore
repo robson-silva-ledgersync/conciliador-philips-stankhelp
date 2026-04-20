@@ -23,3 +23,12 @@ Thumbs.db
 build/
 dist/
 __pycache__/
+app.py
+reconciler.py
+build.bat
+*.db
+*.xlsx
+.claude/
+frontend/AGENTS.md
+frontend/CLAUDE.md
+frontend/README.md

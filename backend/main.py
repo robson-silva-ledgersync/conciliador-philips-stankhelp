@@ -35,7 +35,8 @@ if frontend_url:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    # So aceita dominios deste projeto especifico na Vercel
+    allow_origin_regex=r"https://(conciliador-stankhelp|frontend-[a-z0-9]+-robson-silva-ledgersyncs-projects)\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

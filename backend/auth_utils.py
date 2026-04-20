@@ -6,7 +6,13 @@ from datetime import datetime, timedelta, timezone
 import bcrypt
 from jose import JWTError, jwt
 
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    # Permite valor padrao apenas em dev (SQLite local)
+    if os.getenv("DATABASE_URL", "").startswith(("postgres://", "postgresql://")):
+        raise RuntimeError("SECRET_KEY env var must be set in production")
+    SECRET_KEY = "dev-only-secret-key-not-for-production"
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 

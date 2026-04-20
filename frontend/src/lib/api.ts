@@ -1,29 +1,23 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 class ApiClient {
-  private token: string | null = null;
-
-  constructor() {
-    if (typeof window !== "undefined") {
-      this.token = localStorage.getItem("token");
-    }
-  }
-
   setToken(token: string | null) {
-    this.token = token;
     if (typeof window !== "undefined") {
       if (token) localStorage.setItem("token", token);
       else localStorage.removeItem("token");
     }
   }
 
-  getToken() {
-    return this.token;
+  getToken(): string | null {
+    // Sempre le do localStorage para sincronizar entre abas e evitar cache stale
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("token");
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {};
-    if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
+    const token = this.getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
     if (!(options.body instanceof FormData)) {
       headers["Content-Type"] = "application/json";
     }
@@ -99,9 +93,15 @@ class ApiClient {
   }
 
   async exportExcel(id: string) {
+    const token = this.getToken();
     const res = await fetch(`${API_URL}/api/reconciliation/${id}/export`, {
-      headers: { Authorization: `Bearer ${this.token}` },
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
+    if (res.status === 401) {
+      this.setToken(null);
+      if (typeof window !== "undefined") window.location.href = "/login";
+      throw new Error("Sessao expirada");
+    }
     if (!res.ok) throw new Error("Erro ao exportar");
     return res.blob();
   }

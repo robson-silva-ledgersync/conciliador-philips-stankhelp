@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 # --- Auth ---
@@ -83,20 +83,23 @@ class ReconciliationDetail(ReconciliationSummary):
     records: list[RecordResponse] = []
 
 
+MAX_RECORDS_PER_CATEGORY = 10000  # limite de defesa contra payloads abusivos
+
+
 class ReconciliationUploadResult(BaseModel):
     """Resultado retornado apos upload e conciliacao (antes de salvar no banco)."""
-    philips_count: int
-    stankhelp_count: int
-    conciliados_count: int
-    divergencias_count: int
-    only_philips_count: int
-    only_stank_count: int
+    philips_count: int = Field(ge=0, le=MAX_RECORDS_PER_CATEGORY)
+    stankhelp_count: int = Field(ge=0, le=MAX_RECORDS_PER_CATEGORY)
+    conciliados_count: int = Field(ge=0, le=MAX_RECORDS_PER_CATEGORY)
+    divergencias_count: int = Field(ge=0, le=MAX_RECORDS_PER_CATEGORY)
+    only_philips_count: int = Field(ge=0, le=MAX_RECORDS_PER_CATEGORY)
+    only_stank_count: int = Field(ge=0, le=MAX_RECORDS_PER_CATEGORY)
     total_reembolso: float
     total_mdo: float
-    conciliados: list[dict]
-    divergencias: list[dict]
-    only_philips: list[dict]
-    only_stank: list[dict]
+    conciliados: list[dict] = Field(max_length=MAX_RECORDS_PER_CATEGORY)
+    divergencias: list[dict] = Field(max_length=MAX_RECORDS_PER_CATEGORY)
+    only_philips: list[dict] = Field(max_length=MAX_RECORDS_PER_CATEGORY)
+    only_stank: list[dict] = Field(max_length=MAX_RECORDS_PER_CATEGORY)
 
 
 class SaveReconciliationRequest(BaseModel):

@@ -69,6 +69,24 @@ def _result_to_upload_response(result: ReconciliationResult) -> ReconciliationUp
     )
 
 
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+ALLOWED_EXTENSIONS = (".xlsx", ".xls")
+
+
+def _validate_upload(f: UploadFile, label: str) -> None:
+    if not f.filename or not f.filename.lower().endswith(ALLOWED_EXTENSIONS):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{label} deve ser um arquivo .xlsx ou .xls",
+        )
+    # FastAPI expoe .size em upload chunked
+    if f.size is not None and f.size > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"{label} excede o limite de {MAX_UPLOAD_SIZE // 1024 // 1024} MB",
+        )
+
+
 @router.post("/upload", response_model=ReconciliationUploadResult)
 async def upload_and_reconcile(
     philips_file: UploadFile = File(...),
@@ -76,13 +94,23 @@ async def upload_and_reconcile(
     user: User = Depends(get_current_user),
 ):
     """Upload 2 Excel files, run reconciliation, return result (not yet saved)."""
-    # Save uploaded files to temp
+    _validate_upload(philips_file, "Base Philips")
+    _validate_upload(stankhelp_file, "Relatorio Stankhelp")
+
+    # Le com limite de tamanho (caso .size nao esteja disponivel)
+    philips_bytes = await philips_file.read()
+    if len(philips_bytes) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="Base Philips excede 10 MB")
+    stank_bytes = await stankhelp_file.read()
+    if len(stank_bytes) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="Relatorio Stankhelp excede 10 MB")
+
     with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as f1:
-        f1.write(await philips_file.read())
+        f1.write(philips_bytes)
         philips_path = f1.name
 
     with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as f2:
-        f2.write(await stankhelp_file.read())
+        f2.write(stank_bytes)
         stankhelp_path = f2.name
 
     try:
@@ -90,6 +118,8 @@ async def upload_and_reconcile(
         stank_data = load_stankhelp(stankhelp_path)
         result = reconcile(philips_data, stank_data)
         return _result_to_upload_response(result)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     finally:
