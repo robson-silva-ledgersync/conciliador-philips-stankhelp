@@ -132,6 +132,41 @@ async def upload_and_reconcile(
             stankhelp_path,
             reference_month=reference_month,
         )
+
+        # Se AMBOS os arquivos estao vazios, bloqueia (quase certeza de mes errado).
+        # Se apenas um esta vazio, prossegue - pode ser caso real (ex: Stankhelp
+        # nao submeteu nada mas Philips tem registros que ficam em "Faltando").
+        if not philips_data and not stank_data:
+            from reconciler import _extract_month
+            from collections import Counter
+
+            philips_all = load_philips(philips_path, representante_filter=representante)
+            stank_all = load_stankhelp(stankhelp_path)
+
+            months_found = Counter()
+            for rec in philips_all:
+                m = _extract_month(rec.get('Mês Referência')) or _extract_month(rec.get('Data de Atendimento'))
+                if m:
+                    months_found[m] += 1
+            for rec in stank_all:
+                m = _extract_month(rec.get('Data de Atendimento'))
+                if m:
+                    months_found[m] += 1
+
+            top_months = [m for m, _ in months_found.most_common(3)]
+            suggestion = (
+                f" Meses encontrados nos arquivos: {', '.join(top_months)}."
+                if top_months else ""
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Nenhum registro encontrado para {reference_month} "
+                    f"(representante '{representante}').{suggestion} "
+                    "Verifique se selecionou o mes correto."
+                ),
+            )
+
         result = reconcile(philips_data, stank_data)
         return _result_to_upload_response(result)
     except HTTPException:
@@ -205,6 +240,17 @@ def save_reconciliation(
 ):
     """Save reconciliation result to database."""
     r = data.result
+
+    # Bloqueia salvar resultados vazios - geralmente indica filtro errado
+    total_records = (
+        r.philips_count + r.stankhelp_count
+        + r.conciliados_count + r.divergencias_count
+    )
+    if total_records == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Conciliacao sem registros. Verifique o mes de referencia e tente novamente.",
+        )
 
     recon = Reconciliation(
         user_id=user.id,
@@ -339,6 +385,24 @@ def get_reconciliation(
             for r in recon.records
         ],
     )
+
+
+@router.delete("/{reconciliation_id}", status_code=204)
+def delete_reconciliation(
+    reconciliation_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a saved reconciliation (and all its records via cascade)."""
+    recon = (
+        db.query(Reconciliation)
+        .filter(Reconciliation.id == reconciliation_id, Reconciliation.user_id == user.id)
+        .first()
+    )
+    if not recon:
+        raise HTTPException(status_code=404, detail="Conciliacao nao encontrada")
+    db.delete(recon)
+    db.commit()
 
 
 @router.get("/{reconciliation_id}/export")

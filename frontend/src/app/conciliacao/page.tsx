@@ -128,6 +128,43 @@ function RecordTable({ records, showDivergencias }: { records: Record<string, un
   );
 }
 
+// Mapeia nome do mes em portugues (sem acentos) para numero
+const MONTH_MAP: Record<string, string> = {
+  janeiro: "01", fevereiro: "02", marco: "03",
+  abril: "04", maio: "05", junho: "06", julho: "07",
+  agosto: "08", setembro: "09", outubro: "10",
+  novembro: "11", dezembro: "12",
+};
+
+function detectMonthFromFilename(filename: string): string | null {
+  // Remove acentos (NFD + strip combining marks) para que "MARÇO" vire "marco"
+  const normalized = filename
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+
+  // Padrao 1: "YYYY-MM" ou "YYYY_MM" (seguido de qualquer coisa exceto outro digito)
+  const isoMatch = normalized.match(/(20\d{2})[-_\s]+(0[1-9]|1[0-2])(?!\d)/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}`;
+
+  // Padrao 2: "mes - YYYY" ou "mes YYYY" (ex: "marco - 2026")
+  for (const [name, num] of Object.entries(MONTH_MAP)) {
+    const re = new RegExp(`\\b${name}\\b[\\s\\-_]*(20\\d{2})`);
+    const m = normalized.match(re);
+    if (m) return `${m[1]}-${num}`;
+  }
+
+  // Padrao 3: so o nome do mes - usa ano atual
+  for (const [name, num] of Object.entries(MONTH_MAP)) {
+    const re = new RegExp(`\\b${name}\\b`);
+    if (re.test(normalized)) {
+      return `${new Date().getFullYear()}-${num}`;
+    }
+  }
+
+  return null;
+}
+
 export default function ConciliacaoPage() {
   const [philipsFile, setPhilipsFile] = useState<File | null>(null);
   const [stankhelpFile, setStankhelpFile] = useState<File | null>(null);
@@ -135,6 +172,7 @@ export default function ConciliacaoPage() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
+  const [monthAutoDetected, setMonthAutoDetected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<ReconciliationUploadResult | null>(null);
@@ -175,6 +213,31 @@ export default function ConciliacaoPage() {
     setPhilipsFile(null);
     setStankhelpFile(null);
     setResult(null);
+    setMonthAutoDetected(false);
+  };
+
+  // Auto-detecta mes quando arquivo e selecionado (se usuario nao definiu manualmente)
+  const handleStankhelpFile = (f: File) => {
+    setStankhelpFile(f);
+    const detected = detectMonthFromFilename(f.name);
+    if (detected && !monthAutoDetected) {
+      setMonth(detected);
+      setMonthAutoDetected(true);
+      toast.info(`Mes detectado automaticamente: ${detected}`);
+    }
+  };
+
+  const handlePhilipsFile = (f: File) => {
+    setPhilipsFile(f);
+    // So tenta detectar pela Philips se a Stankhelp ainda nao detectou
+    if (!stankhelpFile && !monthAutoDetected) {
+      const detected = detectMonthFromFilename(f.name);
+      if (detected) {
+        setMonth(detected);
+        setMonthAutoDetected(true);
+        toast.info(`Mes detectado automaticamente: ${detected}`);
+      }
+    }
   };
 
   return (
@@ -204,12 +267,12 @@ export default function ConciliacaoPage() {
                 <FileDrop
                   label="Base Philips"
                   file={philipsFile}
-                  onFile={setPhilipsFile}
+                  onFile={handlePhilipsFile}
                 />
                 <FileDrop
                   label="Relatorio Stankhelp"
                   file={stankhelpFile}
-                  onFile={setStankhelpFile}
+                  onFile={handleStankhelpFile}
                 />
               </div>
 

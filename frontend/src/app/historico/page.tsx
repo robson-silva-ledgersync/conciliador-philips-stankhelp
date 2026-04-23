@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Download } from "lucide-react";
+import { Download, Trash2 } from "lucide-react";
 import { api, type ReconciliationSummary } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -47,6 +47,17 @@ export default function HistoricoPage() {
       toast.success("Excel exportado!");
     } catch {
       toast.error("Erro ao exportar");
+    }
+  };
+
+  const handleDelete = async (id: string, month: string) => {
+    if (!confirm(`Excluir conciliacao de ${month}? Esta acao nao pode ser desfeita.`)) return;
+    try {
+      await api.deleteReconciliation(id);
+      setData((prev) => prev.filter((r) => r.id !== id));
+      toast.success("Conciliacao excluida");
+    } catch {
+      toast.error("Erro ao excluir");
     }
   };
 
@@ -107,13 +118,25 @@ export default function HistoricoPage() {
                         {formatCurrency(r.total_reembolso)}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleExport(r.id, r.reference_month)}
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleExport(r.id, r.reference_month)}
+                            title="Exportar Excel"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(r.id, r.reference_month)}
+                            title="Excluir"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

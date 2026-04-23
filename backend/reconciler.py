@@ -76,7 +76,13 @@ def _extract_month(val) -> str | None:
     m = re.match(r'(\d{1,2})[./](\d{1,2})[./](\d{4})', s)
     if m:
         day, month, year = m.groups()
-        return f'{int(year):04d}-{int(month):02d}'
+        month_int = int(month)
+        year_int = int(year)
+        if not (1 <= month_int <= 12):
+            return None
+        if not (1900 <= year_int <= 2100):
+            return None
+        return f'{year_int:04d}-{month_int:02d}'
     return None
 
 

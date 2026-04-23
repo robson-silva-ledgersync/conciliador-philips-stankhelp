@@ -99,6 +99,10 @@ class ApiClient {
     return this.request<ReconciliationDetail>(`/api/reconciliation/${id}`);
   }
 
+  async deleteReconciliation(id: string) {
+    return this.request<void>(`/api/reconciliation/${id}`, { method: "DELETE" });
+  }
+
   async exportExcel(id: string) {
     const token = this.getToken();
     const res = await fetch(`${API_URL}/api/reconciliation/${id}/export`, {
